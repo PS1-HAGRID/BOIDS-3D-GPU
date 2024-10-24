@@ -1,0 +1,188 @@
+//notes:
+/*
+global ID formula = groupID * threads per workgroup (256) + threadID, or threadID % 256
+
+BoidData with padding = 32 bytes, without = 28 bytes
+
+256 threads 1D threadgroups for boids
+
+register(t#) = readonly, register(u#) = RW
+
+cellIndexIn1DArray = (x * numOfCellY + y) * numOfCellZ + z
+*/
+struct BoidData{
+    float3 Position;
+    float3 Velocity;
+    float padding;
+};
+
+StructuredBuffer<BoidData> _InputBoidBuffer : register(t0);
+RWStructuredBuffer<BoidData> _OutputBoidBuffer : register(u0);
+
+RWStructuredBuffer<int> hashTableStart : register(u1);
+RWStructuredBuffer<int> hashTable : register(u2);
+RWStructuredBuffer<int> queryIDs : register(u3);
+
+uint numOfBoids;
+uint maxNeightbors;
+uint numOfNeighbors;
+uint tableSize;
+uint querySize;
+
+float fieldOfView;
+float protectedRange;
+float maxSpeed;
+
+float centeringFactor;
+float alignmentFactor;
+float avoidanceFactor;
+float turnFactor;
+
+float3 center;
+float3 size;
+float3 minCorner;
+float3 maxCorner;
+float cellSize;
+
+int HashFunction(int3 cellPosition){
+    int hash = (cellPosition.x * 73856093) ^ (cellPosition.y * 19349663) ^ (cellPosition.z * 83492791) % tableSize;
+    return hash;
+}
+
+int3 GetCellPos(float3 position){
+    return int3(floor(position/cellSize));
+}
+
+void Insert(int id){
+    int3 cellPos = GetCellPos(_InputBoidBuffer[id].Position);
+    int hash = HashFunction(cellPos);
+
+    hashTableStart[hash]++;
+}
+
+void MakeGrid(){
+
+}
+
+#pragma kernel SpatialHashing
+
+[numthreads(1024,1,1)]
+void SpatialHashing(uint3 Pid : SV_DispatchThreadID)
+{
+    int id = Pid.x;
+
+    if(id < 1){
+        MakeGrid();
+    }
+
+    Insert(id);
+
+
+}
+
+
+
+void Query(){
+
+}
+
+
+#pragma kernel BoidsLogic
+
+groupshared BoidData boidDatas[256];
+[numthreads(256,1,1)]
+void BoidsLogic (uint3 Pid : SV_DispatchThreadID, uint3 Gid : SV_GroupID)
+{
+    //small calculation to find the globalIDs of the threads within the threadgroup
+    uint localID = Pid.x % 256;
+
+    //shared memory population
+    boidDatas[localID] = _InputBoidBuffer[Pid.x];
+    GroupMemoryBarrierWithGroupSync();
+
+    //meat of the algorithm
+    float3 alignment = float3(0,0,0);
+    float3 cohesion = float3(0,0,0);
+    float3 separation = float3(0,0,0);
+
+    BoidData currentBoid = boidDatas[localID];
+
+    uint neightbors = 0;
+
+    float protectedRangeSquared = protectedRange * protectedRange;
+
+    //TO CHANGE, instead of loop throught all boids i should query only nearby boids and check these
+    //brain of the algorithm
+    for(uint otherboid = 0; otherboid < numOfBoids; otherboid++){
+
+        BoidData currentOtherBoid = _InputBoidBuffer[otherboid];
+
+        float3 diff = currentBoid.Position - currentOtherBoid.Position;
+
+        if(abs(diff.x) > fieldOfView && abs(diff.y) > fieldOfView && abs(diff.z) > fieldOfView) continue;
+
+        float squaredDistance = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
+
+        if(squaredDistance < protectedRangeSquared){
+            separation += diff;
+            continue;
+        }
+
+        if(neightbors > maxNeightbors){
+            continue;
+        }
+
+        neightbors++;
+
+        alignment += currentOtherBoid.Velocity;
+        cohesion += currentOtherBoid.Position;
+    }
+    //adding it all together
+    if(neightbors > 0){
+        cohesion /= neightbors;
+        alignment /= neightbors;
+        currentBoid.Velocity += ((cohesion - currentBoid.Position) * centeringFactor + (alignment - currentBoid.Velocity) * alignmentFactor);
+    }
+    currentBoid.Velocity += separation * avoidanceFactor;
+
+    //and that, ladies and gentleman, is how we limit speed without using sqrt
+    float speedSquared = currentBoid.Velocity.x * currentBoid.Velocity.x + currentBoid.Velocity.y * currentBoid.Velocity.y + currentBoid.Velocity.z * currentBoid.Velocity.z;
+    float maxSpeedSquared = maxSpeed * maxSpeed;
+
+    if(speedSquared > maxSpeedSquared){
+        float scalingFactor = maxSpeedSquared/speedSquared;
+
+        currentBoid.Velocity *= scalingFactor;
+    }
+
+    //huge ugly if cascade incoming!!
+    //X OOB detection
+    if(currentBoid.Position.x > maxCorner.x){
+        currentBoid.Velocity.x -= turnFactor;
+    } else 
+    if(currentBoid.Position.x < minCorner.x){
+        currentBoid.Velocity.x += turnFactor;
+    }
+
+    //Y OOB detection
+    if(currentBoid.Position.y > maxCorner.y){
+        currentBoid.Velocity.y -= turnFactor;
+    } else 
+    if(currentBoid.Position.y < minCorner.y){
+        currentBoid.Velocity.y += turnFactor;   
+    }
+
+    //Z OOB detection
+    if(currentBoid.Position.z > maxCorner.z){
+        currentBoid.Velocity.z -= turnFactor;
+    } else 
+    if(currentBoid.Position.z < minCorner.z){
+        currentBoid.Velocity.z += turnFactor;
+    }
+
+    //adding the final velocity to the position
+    currentBoid.Position += currentBoid.Velocity;
+
+    //adding everything to the output buffer and readying for the return trip
+    _OutputBoidBuffer[Pid.x] = currentBoid;
+}

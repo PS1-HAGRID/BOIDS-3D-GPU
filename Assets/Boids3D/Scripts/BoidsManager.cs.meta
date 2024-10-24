@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d5777a9d6ac084c4ab4432f67d4207de
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - bounds: {instanceID: 0}
+  - boidMaterial: {instanceID: 0}
+  - boidMesh: {fileID: 10208, guid: 0000000000000000e000000000000000, type: 0}
+  - boidGPUPhysicsComputeShader: {fileID: 7200000, guid: ff1b786d3241922439b014c3bbb200ae, type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
