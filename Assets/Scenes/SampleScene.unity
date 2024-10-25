@@ -283,7 +283,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 466.5163, y: 437.6333, z: 557.9635}
+  m_Size: {x: 1000, y: 1000, z: 1000}
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!4 &772104168
 Transform:
@@ -460,7 +460,7 @@ MonoBehaviour:
   centeringFactor: 0.0005
   alignmentFactor: 0.05
   avoidanceFactor: 0.5
-  steerAwayFromBoundsStrenght: 0.1
+  steerAwayFromBoundsStrenght: 10
   _BoidsLogicShader: {fileID: 7200000, guid: fa4a0521689a3c1488ef6c18b16a10fb, type: 3}
   _Bounds: {fileID: 772104167}
   _MaxNeightbors: 15

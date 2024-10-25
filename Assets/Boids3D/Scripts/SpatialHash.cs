@@ -84,7 +84,6 @@ public class SpatialHash {
             _HashStart[lCurrentHash]--;
             _HashTable[_HashStart[lCurrentHash]] = objectID;
         }
-        
     }
 
     //main Query function
@@ -93,13 +92,13 @@ public class SpatialHash {
         //find the start and the end of the query
         int3 lQueryStart = GetGridCoords(pObjectToQueryPos - pRange);
         int3 lQueryEnd = GetGridCoords(pObjectToQueryPos + pRange);
-
+        
         _NumOfQueriedObject = 0;
 
         //ooooh baby that's a big ugly nest
         for (int XQuery = lQueryStart.x; XQuery < lQueryEnd.x; XQuery++) 
         { 
-            for(int YQuery = lQueryStart.y; YQuery < lQueryEnd.y;)
+            for(int YQuery = lQueryStart.y; YQuery < lQueryEnd.y; YQuery++)
             {
                 for( int ZQuery = lQueryStart.z; ZQuery < lQueryEnd.z; ZQuery++)
                 {

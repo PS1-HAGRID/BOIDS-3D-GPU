@@ -159,15 +159,16 @@ public class BoidsDefinitiveScript : MonoBehaviour
         }
 
         //debug
+        
         hashTable = new SpatialHash(_CellSize, debug.Length, debug);
         int[] result = new int[numberOfBoids];
-        result = hashTable.GetQueryIDs(debug[0], fieldOfView);
-        /*
+        result = hashTable.GetQueryIDs(debug[0], fieldOfView * 2);
+        
         for (int i = 0; i < result.Length; i++) 
         {
             Debug.Log(result[i]);
         }
-        */
+        
        }
 
     void Start()
