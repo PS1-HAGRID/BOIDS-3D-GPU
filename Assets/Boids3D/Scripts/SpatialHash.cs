@@ -109,7 +109,6 @@ public class SpatialHash {
 
                     for(int range = start; range < end; range++)
                     {
-
                         //the problem child, Y U NO WORK (return index out of range)
                         queryIDs[_NumOfQueriedObject] = _HashTable[range];
                         _NumOfQueriedObject++;
