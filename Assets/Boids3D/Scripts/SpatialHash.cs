@@ -93,6 +93,8 @@ public class SpatialHash {
         int3 lQueryStart = GetGridCoords(pObjectToQueryPos - pRange);
         int3 lQueryEnd = GetGridCoords(pObjectToQueryPos + pRange);
         
+
+
         _NumOfQueriedObject = 0;
 
         //ooooh baby that's a big ugly nest
@@ -108,7 +110,6 @@ public class SpatialHash {
 
                     for(int range = start; range < end; range++)
                     {
-                        //the problem child, Y U NO WORK (return index out of range)
                         queryIDs[_NumOfQueriedObject] = _HashTable[range];
                         _NumOfQueriedObject++;
                     }

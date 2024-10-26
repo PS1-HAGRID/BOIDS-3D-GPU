@@ -50,6 +50,7 @@ public class BoidsDefinitiveScript : MonoBehaviour
     ComputeBuffer _HashTableBuffer;
     ComputeBuffer _HashStartBuffer;
     ComputeBuffer _QueryIDs;
+    ComputeBuffer _EmptyQueryBuffer;
 
     int _CellsPerX;
     int _CellsPerY;
@@ -94,13 +95,19 @@ public class BoidsDefinitiveScript : MonoBehaviour
         _HashTableBuffer = new ComputeBuffer(hashTableSize + 1, sizeof(int));
         _HashStartBuffer = new ComputeBuffer(numberOfBoids, sizeof(int));
         _QueryIDs = new ComputeBuffer(numberOfBoids, sizeof(uint));
+        _EmptyQueryBuffer = new ComputeBuffer(numberOfBoids, sizeof(uint));
 
         //binding I/O buffers
         _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "_InputBoidBuffer", _InputBuffer);
         _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "_OutputBoidBuffer", _OutputBuffer);
+        _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "queryIDs", _QueryIDs);
+        _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "emptyQueryBuffer", _EmptyQueryBuffer);
+        _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "hashTable", _HashTableBuffer);
+        _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "hashTableStart", _HashStartBuffer);
 
+        _BoidsLogicShader.SetBuffer(SpatialHashingKernelIndex, "_InputBoidBuffer", _InputBuffer);
         _BoidsLogicShader.SetBuffer(SpatialHashingKernelIndex, "hashTable", _HashTableBuffer);
-        _BoidsLogicShader.SetBuffer(SpatialHashingKernelIndex, "hashNext", _HashStartBuffer);
+        _BoidsLogicShader.SetBuffer(SpatialHashingKernelIndex, "hashTableStart", _HashStartBuffer);
         _BoidsLogicShader.SetBuffer(SpatialHashingKernelIndex, "queryIDs", _QueryIDs);
 
         //binding compute shader vars
@@ -150,25 +157,6 @@ public class BoidsDefinitiveScript : MonoBehaviour
 
         //assigning array to I buffer
         _InputBuffer.SetData(boidDatas);
-
-        float3[] debug = new float3[numberOfBoids];
-        
-        for(int i = 0; i < numberOfBoids; i++)
-        {
-            debug[i] = boidDatas[i].Position;
-        }
-
-        //debug
-        
-        hashTable = new SpatialHash(_CellSize, debug.Length, debug);
-        int[] result = new int[numberOfBoids];
-        result = hashTable.GetQueryIDs(debug[0], fieldOfView * 2);
-        
-        for (int i = 0; i < result.Length; i++) 
-        {
-            Debug.Log(result[i]);
-        }
-        
        }
 
     void Start()
@@ -179,6 +167,7 @@ public class BoidsDefinitiveScript : MonoBehaviour
     private void SimStep()
     {
         //dispatching kernels
+        _BoidsLogicShader.Dispatch(SpatialHashingKernelIndex,1,1,1);
         _BoidsLogicShader.Dispatch(BoidsLogicKernelIndex, _NumThreadGroupsForBoidsToDispatch, 1, 1);
 
         //collecting data from shader
