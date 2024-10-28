@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Unity.Burst;
 using Unity.Mathematics;
 using UnityEngine;
 using Random = UnityEngine.Random;
@@ -66,7 +67,57 @@ public class BoidsDefinitiveScript : MonoBehaviour
     {
         int group = 0;
 
-        Vector3.Cross(position, centerOfSimulation).Normalize();
+        if(position.y >= centerOfSimulation.y)
+        {
+            if(position.x >= centerOfSimulation.x)
+            {
+                if(position.z >= centerOfSimulation.z)
+                {
+                    group = 8;
+                }
+                else
+                {
+                    group = 7;
+                }
+            }
+            else
+            {
+                if (position.z >= centerOfSimulation.z)
+                {
+                    group = 6;
+                }
+                else
+                {
+                    group = 5;
+                }
+            }
+        }
+        else
+        {
+            if (position.x >= centerOfSimulation.x)
+            {
+                if (position.z >= centerOfSimulation.z)
+                {
+                    group = 4;
+                }
+                else
+                {
+                    group = 3;
+                }
+            }
+            else
+            {
+                if (position.z >= centerOfSimulation.z)
+                {
+                    group = 2;
+                }
+                else
+                {
+                    group = 1;
+                }
+            }
+        }
+
 
         return group;
     }
@@ -151,7 +202,7 @@ public class BoidsDefinitiveScript : MonoBehaviour
         {
             boidDatas[currentBoid].Position = new float3(Random.Range(_Bounds.bounds.min.x, _Bounds.bounds.max.x), Random.Range(_Bounds.bounds.min.y, _Bounds.bounds.max.y), Random.Range(_Bounds.bounds.min.z, _Bounds.bounds.max.z));
             boidDatas[currentBoid].Velocity = new float3(Random.Range(0, 1), Random.Range(0, 1), Random.Range(0, 1));
-            boidDatas[currentBoid].Group = Random.Range(0, numberOfGroups);
+            boidDatas[currentBoid].Group = AssignGroup(boidDatas[currentBoid].Position, _Bounds.center);
 
             batches[currentBatch][itemCounter] = MatrixHelper.MatrixBuilder(boidDatas[currentBoid].Position, quaternion.identity, boidScale);
 
@@ -165,8 +216,6 @@ public class BoidsDefinitiveScript : MonoBehaviour
                 batches.Add(currentmatrices);
             }
         }
-
-        Debug.Log(AssignGroup(boidDatas[1].Position, _Bounds.bounds.center));
 
         //assigning array to I buffer
         _InputBuffer.SetData(boidDatas);
@@ -212,28 +261,6 @@ public class BoidsDefinitiveScript : MonoBehaviour
         {
             Graphics.DrawMeshInstanced(boidMesh, 0, boidMaterial, batches[batch]);
         }
-    }
-
-    private void DrawGrid()
-    {
-        float size = _CellSize;
-
-        for(int cellX = 0; cellX < _CellsPerX; cellX++)
-        {
-            for(int celly = 0; celly < _CellsPerY; celly++)
-            {
-                for(int cellz = 0; cellz < _CellsPerZ; cellz++)
-                {
-                    Gizmos.DrawWireCube(new Vector3(cellX + size, celly + size, cellz + size), new Vector3(size, size, size));
-                }
-            }
-        }
-        
-    }
-
-    private void OnDrawGizmos()
-    {
-        //DrawGrid();
     }
 
     void Update()

@@ -454,7 +454,7 @@ MonoBehaviour:
   fieldOfView: 5
   protectedRange: 2
   maxSpeed: 6
-  boidMesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+  boidMesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
   boidMaterial: {fileID: 2100000, guid: 4ea13e422963b8f4fb871c877a244376, type: 2}
   boidScale: {x: 1, y: 1, z: 1}
   centeringFactor: 0.0005

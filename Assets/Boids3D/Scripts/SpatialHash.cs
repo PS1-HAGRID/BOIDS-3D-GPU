@@ -92,8 +92,6 @@ public class SpatialHash {
         //find the start and the end of the query
         int3 lQueryStart = GetGridCoords(pObjectToQueryPos - pRange);
         int3 lQueryEnd = GetGridCoords(pObjectToQueryPos + pRange);
-        
-
 
         _NumOfQueriedObject = 0;
 
@@ -119,5 +117,4 @@ public class SpatialHash {
         
         return queryIDs;
     }
-
 }
