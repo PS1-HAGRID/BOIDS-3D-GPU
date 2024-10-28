@@ -8,7 +8,7 @@ public struct BoidData
 {
     public float3 Position;
     public float3 Velocity;
-    float padding;
+    public int Group;
 }
 
 public class BoidsDefinitiveScript : MonoBehaviour
@@ -26,6 +26,7 @@ public class BoidsDefinitiveScript : MonoBehaviour
     public float alignmentFactor = 0.05f;
     public float avoidanceFactor = 0.05f;
     public float steerAwayFromBoundsStrenght = 0.2f;
+    public int numberOfGroups = 1;
 
     [Header("sim params")]
     [SerializeField] private ComputeShader _BoidsLogicShader;
@@ -60,6 +61,15 @@ public class BoidsDefinitiveScript : MonoBehaviour
     int hashTableSize;
 
     SpatialHash hashTable;
+
+    private int AssignGroup(float3 position, float3 centerOfSimulation)
+    {
+        int group = 0;
+
+        Vector3.Cross(position, centerOfSimulation).Normalize();
+
+        return group;
+    }
 
     private void Init()
     {
@@ -141,6 +151,7 @@ public class BoidsDefinitiveScript : MonoBehaviour
         {
             boidDatas[currentBoid].Position = new float3(Random.Range(_Bounds.bounds.min.x, _Bounds.bounds.max.x), Random.Range(_Bounds.bounds.min.y, _Bounds.bounds.max.y), Random.Range(_Bounds.bounds.min.z, _Bounds.bounds.max.z));
             boidDatas[currentBoid].Velocity = new float3(Random.Range(0, 1), Random.Range(0, 1), Random.Range(0, 1));
+            boidDatas[currentBoid].Group = Random.Range(0, numberOfGroups);
 
             batches[currentBatch][itemCounter] = MatrixHelper.MatrixBuilder(boidDatas[currentBoid].Position, quaternion.identity, boidScale);
 
@@ -154,6 +165,8 @@ public class BoidsDefinitiveScript : MonoBehaviour
                 batches.Add(currentmatrices);
             }
         }
+
+        Debug.Log(AssignGroup(boidDatas[1].Position, _Bounds.bounds.center));
 
         //assigning array to I buffer
         _InputBuffer.SetData(boidDatas);

@@ -450,17 +450,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3310ea27c5fa44547b771b186a34f0f0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  numberOfBoids: 30000
-  fieldOfView: 2
-  protectedRange: 1
+  numberOfBoids: 20000
+  fieldOfView: 5
+  protectedRange: 2
   maxSpeed: 6
-  boidMesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
+  boidMesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
   boidMaterial: {fileID: 2100000, guid: 4ea13e422963b8f4fb871c877a244376, type: 2}
   boidScale: {x: 1, y: 1, z: 1}
   centeringFactor: 0.0005
   alignmentFactor: 0.05
   avoidanceFactor: 0.5
-  steerAwayFromBoundsStrenght: 10
+  steerAwayFromBoundsStrenght: 0.02
+  numberOfGroups: 10
   _BoidsLogicShader: {fileID: 7200000, guid: fa4a0521689a3c1488ef6c18b16a10fb, type: 3}
   _Bounds: {fileID: 772104167}
   _MaxNeightbors: 30
