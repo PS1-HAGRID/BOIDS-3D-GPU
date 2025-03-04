@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Unity.Burst;
 using Unity.Mathematics;
 using UnityEngine;
 using Random = UnityEngine.Random;
@@ -27,13 +26,15 @@ public class BoidsDefinitiveScript : MonoBehaviour
     public float alignmentFactor = 0.05f;
     public float avoidanceFactor = 0.05f;
     public float steerAwayFromBoundsStrenght = 0.2f;
-    public int numberOfGroups = 1;
+    public int numOfGroup;
+
 
     [Header("sim params")]
     [SerializeField] private ComputeShader _BoidsLogicShader;
     [SerializeField] BoxCollider _Bounds;
     [SerializeField] private int _MaxNeightbors;
     [SerializeField] private Camera _Camera;
+    [SerializeField] public int _SimulationSpeed = 1;
 
     const int THREADS_PER_GROUP = 256;
     const int ITEMS_PER_BATCHES = 1000;
@@ -47,7 +48,6 @@ public class BoidsDefinitiveScript : MonoBehaviour
     List<Matrix4x4[]> batches = new List<Matrix4x4[]>();
 
     ComputeBuffer _InputBuffer;
-    ComputeBuffer _OutputBuffer;
 
     ComputeBuffer _HashTableBuffer;
     ComputeBuffer _HashStartBuffer;
@@ -63,72 +63,25 @@ public class BoidsDefinitiveScript : MonoBehaviour
 
     SpatialHash hashTable;
 
-    private int AssignGroup(float3 position, float3 centerOfSimulation)
+    private int AssignGroup(int pTotalNumOfGroup)
     {
-        int group = 0;
-
-        if(position.y >= centerOfSimulation.y)
-        {
-            if(position.x >= centerOfSimulation.x)
-            {
-                if(position.z >= centerOfSimulation.z)
-                {
-                    group = 8;
-                }
-                else
-                {
-                    group = 7;
-                }
-            }
-            else
-            {
-                if (position.z >= centerOfSimulation.z)
-                {
-                    group = 6;
-                }
-                else
-                {
-                    group = 5;
-                }
-            }
-        }
-        else
-        {
-            if (position.x >= centerOfSimulation.x)
-            {
-                if (position.z >= centerOfSimulation.z)
-                {
-                    group = 4;
-                }
-                else
-                {
-                    group = 3;
-                }
-            }
-            else
-            {
-                if (position.z >= centerOfSimulation.z)
-                {
-                    group = 2;
-                }
-                else
-                {
-                    group = 1;
-                }
-            }
-        }
-
-
+        int group = Random.Range(0, pTotalNumOfGroup);
         return group;
     }
 
     private void Init()
     {
-        hashTableSize = numberOfBoids * 2;
+        //scaling variables with boids sizes to keep behavior the same no matter the size
+        float scale = math.max(boidScale.x, boidScale.y) >= math.max(boidScale.x, boidScale.z) ? math.max(boidScale.x, boidScale.y) : boidScale.z;
+        fieldOfView *= scale;
+        protectedRange *= scale;
+        steerAwayFromBoundsStrenght *= scale;
 
         //initializing values for spatial hash grid
+        hashTableSize = numberOfBoids * 2;
+
         float _BBvolume = _Bounds.bounds.size.x * _Bounds.bounds.size.y * _Bounds.bounds.size.z;
-        _CellSize = Mathf.Pow(_BBvolume / (_MaxNeightbors * numberOfBoids), 1f/3f);
+        _CellSize = fieldOfView;
 
         _CellsPerX = (int)(_Bounds.bounds.size.x / _CellSize);
         _CellsPerY = (int)(_Bounds.bounds.size.y / _CellSize);
@@ -136,22 +89,15 @@ public class BoidsDefinitiveScript : MonoBehaviour
 
         _TotalCells = _CellsPerX * _CellsPerY * _CellsPerZ;
 
-        //scaling variables with boids sizes to keep behavior the same no matter the size
-        float scale = math.max(boidScale.x, boidScale.y) >= math.max(boidScale.x, boidScale.z) ? math.max(boidScale.x, boidScale.y) : boidScale.z;
-        fieldOfView *= scale;
-        protectedRange *= scale;
-        steerAwayFromBoundsStrenght *= scale;
+        // Finding Thread Groups
+        _NumThreadGroupsForBoidsToDispatch = Mathf.CeilToInt(numberOfBoids/THREADS_PER_GROUP);
 
-        //i cannot believe that there isn't a simpler round up function
-        _NumThreadGroupsForBoidsToDispatch = (int)Math.Ceiling(numberOfBoids/(double)THREADS_PER_GROUP);
-
-        //finding kernel index for the boids logic kernel
+        // finding kernel index for the boids logic kernel
         BoidsLogicKernelIndex = _BoidsLogicShader.FindKernel("BoidsLogic");
         SpatialHashingKernelIndex = _BoidsLogicShader.FindKernel("SpatialHashing");
 
-        //initializing I/O buffers
-        _InputBuffer = new ComputeBuffer(numberOfBoids, sizeof(float) * 7);
-        _OutputBuffer = new ComputeBuffer(numberOfBoids, sizeof(float) * 7);
+        // initializing I/O buffers
+        _InputBuffer = new ComputeBuffer(numberOfBoids, sizeof(float) * 6 + sizeof(int));
 
         _HashTableBuffer = new ComputeBuffer(hashTableSize + 1, sizeof(int));
         _HashStartBuffer = new ComputeBuffer(numberOfBoids, sizeof(int));
@@ -160,7 +106,6 @@ public class BoidsDefinitiveScript : MonoBehaviour
 
         //binding I/O buffers
         _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "_InputBoidBuffer", _InputBuffer);
-        _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "_OutputBoidBuffer", _OutputBuffer);
         _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "queryIDs", _QueryIDs);
         _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "emptyQueryBuffer", _EmptyQueryBuffer);
         _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "hashTable", _HashTableBuffer);
@@ -202,7 +147,7 @@ public class BoidsDefinitiveScript : MonoBehaviour
         {
             boidDatas[currentBoid].Position = new float3(Random.Range(_Bounds.bounds.min.x, _Bounds.bounds.max.x), Random.Range(_Bounds.bounds.min.y, _Bounds.bounds.max.y), Random.Range(_Bounds.bounds.min.z, _Bounds.bounds.max.z));
             boidDatas[currentBoid].Velocity = new float3(Random.Range(0, 1), Random.Range(0, 1), Random.Range(0, 1));
-            boidDatas[currentBoid].Group = AssignGroup(boidDatas[currentBoid].Position, _Bounds.center);
+            boidDatas[currentBoid].Group = AssignGroup(numOfGroup);
 
             batches[currentBatch][itemCounter] = MatrixHelper.MatrixBuilder(boidDatas[currentBoid].Position, quaternion.identity, boidScale);
 
@@ -228,12 +173,15 @@ public class BoidsDefinitiveScript : MonoBehaviour
 
     private void SimStep()
     {
+        //Update Dynamic Values
+        UpdateSimulationParameters();
+
         //dispatching kernels
-        _BoidsLogicShader.Dispatch(SpatialHashingKernelIndex,1,1,1);
+        //_BoidsLogicShader.Dispatch(SpatialHashingKernelIndex,1,1,1);
         _BoidsLogicShader.Dispatch(BoidsLogicKernelIndex, _NumThreadGroupsForBoidsToDispatch, 1, 1);
 
         //collecting data from shader
-        _OutputBuffer.GetData(boidDatas);
+        _InputBuffer.GetData(boidDatas);
 
         //updating batches for batch renderer
         int id = 0;
@@ -249,12 +197,16 @@ public class BoidsDefinitiveScript : MonoBehaviour
             }
         }
 
-        //assigning collected values from the O buffer to the I buffer
-        _InputBuffer.SetData(boidDatas);
-
         //drawing all boids batches, 1000 at a time per batch (hard limit)
         DrawBoids();
     }
+
+    private void UpdateSimulationParameters()
+    {
+        _BoidsLogicShader.SetFloat("deltaTime", Time.deltaTime);
+        _BoidsLogicShader.SetFloat("simulationSpeed", _SimulationSpeed);
+    }
+
     private void DrawBoids()
     {
         for (int batch = 0; batch < batches.Count; batch++)

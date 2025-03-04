@@ -13,11 +13,10 @@ cellIndexIn1DArray = (x * numOfCellY + y) * numOfCellZ + z
 struct BoidData{
     float3 Position;
     float3 Velocity;
-    float padding;
+    int Group;
 };
 
-StructuredBuffer<BoidData> _InputBoidBuffer : register(t0);
-RWStructuredBuffer<BoidData> _OutputBoidBuffer : register(u0);
+RWStructuredBuffer<BoidData> _InputBoidBuffer : register(u0);
 
 RWStructuredBuffer<int> hashTableStart : register(u1);
 RWStructuredBuffer<int> hashTable : register(u2);
@@ -32,6 +31,8 @@ uint querySize;
 float fieldOfView;
 float protectedRange;
 float maxSpeed;
+float deltaTime;
+float simulationSpeed;
 
 float centeringFactor;
 float alignmentFactor;
@@ -88,24 +89,19 @@ void Query(){
 
 
 #pragma kernel BoidsLogic
-
-groupshared BoidData boidDatas[256];
 [numthreads(256,1,1)]
-void BoidsLogic (uint3 Pid : SV_DispatchThreadID, uint3 Gid : SV_GroupID)
+void BoidsLogic (uint3 Pid : SV_DispatchThreadID)
 {
     //small calculation to find the globalIDs of the threads within the threadgroup
-    uint localID = Pid.x % 256;
+    uint localID = Pid.x;
 
     //shared memory population
-    boidDatas[localID] = _InputBoidBuffer[Pid.x];
-    GroupMemoryBarrierWithGroupSync();
+    BoidData currentBoid = _InputBoidBuffer[localID];
 
     //meat of the algorithm
     float3 alignment = float3(0,0,0);
     float3 cohesion = float3(0,0,0);
     float3 separation = float3(0,0,0);
-
-    BoidData currentBoid = boidDatas[localID];
 
     uint neightbors = 0;
 
@@ -113,21 +109,28 @@ void BoidsLogic (uint3 Pid : SV_DispatchThreadID, uint3 Gid : SV_GroupID)
 
     //TO CHANGE, instead of loop throught all boids i should query only nearby boids and check these
     //brain of the algorithm
-    for(uint otherboid = 0; otherboid < numOfBoids; otherboid++){
-
+    for (uint otherboid = 0; otherboid < numOfBoids; otherboid++)
+    {
         BoidData currentOtherBoid = _InputBoidBuffer[otherboid];
 
         float3 diff = currentBoid.Position - currentOtherBoid.Position;
-
-        if(abs(diff.x) > fieldOfView && abs(diff.y) > fieldOfView && abs(diff.z) > fieldOfView) continue;
-
+        
         float squaredDistance = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
+        
+        if (squaredDistance > fieldOfView * fieldOfView){
+            continue;
+        }
 
         if(squaredDistance < protectedRangeSquared){
             separation += diff;
             continue;
         }
 
+        if (currentBoid.Group != currentOtherBoid.Group)
+        {
+            continue;
+        }
+        
         if(neightbors > maxNeightbors){
             continue;
         }
@@ -144,7 +147,7 @@ void BoidsLogic (uint3 Pid : SV_DispatchThreadID, uint3 Gid : SV_GroupID)
         currentBoid.Velocity += ((cohesion - currentBoid.Position) * centeringFactor + (alignment - currentBoid.Velocity) * alignmentFactor);
     }
     currentBoid.Velocity += separation * avoidanceFactor;
-
+    
     //and that, ladies and gentleman, is how we limit speed without using sqrt
     float speedSquared = currentBoid.Velocity.x * currentBoid.Velocity.x + currentBoid.Velocity.y * currentBoid.Velocity.y + currentBoid.Velocity.z * currentBoid.Velocity.z;
     float maxSpeedSquared = maxSpeed * maxSpeed;
@@ -184,5 +187,5 @@ void BoidsLogic (uint3 Pid : SV_DispatchThreadID, uint3 Gid : SV_GroupID)
     currentBoid.Position += currentBoid.Velocity;
 
     //adding everything to the output buffer and readying for the return trip
-    _OutputBoidBuffer[Pid.x] = currentBoid;
+    _InputBoidBuffer[localID] = currentBoid;
 }

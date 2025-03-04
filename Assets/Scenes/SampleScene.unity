@@ -283,7 +283,7 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 1000, y: 1000, z: 1000}
+  m_Size: {x: 500, y: 500, z: 500}
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!4 &772104168
 Transform:
@@ -450,22 +450,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3310ea27c5fa44547b771b186a34f0f0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  numberOfBoids: 20000
-  fieldOfView: 5
+  numberOfBoids: 10000
+  fieldOfView: 50
   protectedRange: 2
   maxSpeed: 6
-  boidMesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
+  boidMesh: {fileID: 10208, guid: 0000000000000000e000000000000000, type: 0}
   boidMaterial: {fileID: 2100000, guid: 4ea13e422963b8f4fb871c877a244376, type: 2}
   boidScale: {x: 1, y: 1, z: 1}
   centeringFactor: 0.0005
   alignmentFactor: 0.05
-  avoidanceFactor: 0.5
+  avoidanceFactor: 0.05
   steerAwayFromBoundsStrenght: 0.02
-  numberOfGroups: 10
   _BoidsLogicShader: {fileID: 7200000, guid: fa4a0521689a3c1488ef6c18b16a10fb, type: 3}
   _Bounds: {fileID: 772104167}
   _MaxNeightbors: 30
   _Camera: {fileID: 963194227}
+  _SimulationSpeed: 90
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
