@@ -40,30 +40,14 @@ public class BoidsDefinitiveScript : MonoBehaviour
     const int ITEMS_PER_BATCHES = 1023;
     int _NumThreadGroupsForBoidsToDispatch = 1;
     int BoidsLogicKernelIndex = 0;
-    int SpatialHashingKernelIndex = 1;
 
     BoidData[] boidDatas;
     Matrix4x4[] boidMatrices;
-
 
     List<Matrix4x4[]> batches = new List<Matrix4x4[]>();
 
     ComputeBuffer _InputBuffer;
     ComputeBuffer _OutputBuffer;
-
-    ComputeBuffer _HashTableBuffer;
-    ComputeBuffer _HashStartBuffer;
-    ComputeBuffer _QueryIDs;
-    ComputeBuffer _EmptyQueryBuffer;
-
-    int _CellsPerX;
-    int _CellsPerY;
-    int _CellsPerZ;
-    int _TotalCells;
-    float _CellSize;
-    int hashTableSize;
-
-    SpatialHash hashTable;
 
     private int AssignGroup(int pTotalNumOfGroup)
     {
@@ -79,51 +63,23 @@ public class BoidsDefinitiveScript : MonoBehaviour
         protectedRange *= scale;
         steerAwayFromBoundsStrenght *= scale;
 
-        //initializing values for spatial hash grid
-        hashTableSize = numberOfBoids * 2;
-
-        float _BBvolume = _Bounds.bounds.size.x * _Bounds.bounds.size.y * _Bounds.bounds.size.z;
-        _CellSize = fieldOfView;
-
-        _CellsPerX = (int)(_Bounds.bounds.size.x / _CellSize);
-        _CellsPerY = (int)(_Bounds.bounds.size.y / _CellSize);
-        _CellsPerZ = (int)(_Bounds.bounds.size.z / _CellSize);
-
-        _TotalCells = _CellsPerX * _CellsPerY * _CellsPerZ;
-
         // Finding Thread Groups
-        _NumThreadGroupsForBoidsToDispatch = Mathf.CeilToInt(numberOfBoids/THREADS_PER_GROUP);
+        _NumThreadGroupsForBoidsToDispatch = Mathf.CeilToInt(numberOfBoids/ (float)THREADS_PER_GROUP);
 
         // finding kernel index for the boids logic kernel
         BoidsLogicKernelIndex = _BoidsLogicShader.FindKernel("BoidsLogic");
-        SpatialHashingKernelIndex = _BoidsLogicShader.FindKernel("SpatialHashing");
 
         // initializing I/O buffers
         _InputBuffer = new ComputeBuffer(numberOfBoids, sizeof(float) * 6 + sizeof(int));
-
-        _HashTableBuffer = new ComputeBuffer(hashTableSize + 1, sizeof(int));
-        _HashStartBuffer = new ComputeBuffer(numberOfBoids, sizeof(int));
-        _QueryIDs = new ComputeBuffer(numberOfBoids, sizeof(uint));
-        _EmptyQueryBuffer = new ComputeBuffer(numberOfBoids, sizeof(uint));
         _OutputBuffer = new ComputeBuffer(numberOfBoids, sizeof(float) * 16);
 
         //binding I/O buffers
         _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "_InputBoidBuffer", _InputBuffer);
-        _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "queryIDs", _QueryIDs);
-        _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "emptyQueryBuffer", _EmptyQueryBuffer);
-        _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "hashTable", _HashTableBuffer);
-        _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "hashTableStart", _HashStartBuffer);
         _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "_OutputBuffer", _OutputBuffer);
-
-        _BoidsLogicShader.SetBuffer(SpatialHashingKernelIndex, "_InputBoidBuffer", _InputBuffer);
-        _BoidsLogicShader.SetBuffer(SpatialHashingKernelIndex, "hashTable", _HashTableBuffer);
-        _BoidsLogicShader.SetBuffer(SpatialHashingKernelIndex, "hashTableStart", _HashStartBuffer);
-        _BoidsLogicShader.SetBuffer(SpatialHashingKernelIndex, "queryIDs", _QueryIDs);
 
         //binding compute shader vars
         _BoidsLogicShader.SetInt("numOfBoids", numberOfBoids);
         _BoidsLogicShader.SetInt("maxNeightbors", _MaxNeightbors);
-        _BoidsLogicShader.SetInt("tableSize", hashTableSize);
 
         _BoidsLogicShader.SetFloat("fieldOfView", fieldOfView);
         _BoidsLogicShader.SetFloat("protectedRange", protectedRange);
@@ -193,7 +149,6 @@ public class BoidsDefinitiveScript : MonoBehaviour
         UpdateSimulationParameters();
 
         //dispatching kernels
-        //_BoidsLogicShader.Dispatch(SpatialHashingKernelIndex,1,1,1);
         _BoidsLogicShader.Dispatch(BoidsLogicKernelIndex, _NumThreadGroupsForBoidsToDispatch, 1, 1);
 
         //collecting data from shader

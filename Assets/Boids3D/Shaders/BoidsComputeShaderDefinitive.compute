@@ -161,49 +161,6 @@ float3 minCorner;
 float3 maxCorner;
 float cellSize;
 
-int HashFunction(int3 cellPosition){
-    int hash = (cellPosition.x * 73856093) ^ (cellPosition.y * 19349663) ^ (cellPosition.z * 83492791) % tableSize;
-    return hash;
-}
-
-int3 GetCellPos(float3 position){
-    return int3(floor(position/cellSize));
-}
-
-void Insert(int id){
-    int3 cellPos = GetCellPos(_InputBoidBuffer[id].Position);
-    int hash = HashFunction(cellPos);
-
-    hashTableStart[hash]++;
-}
-
-void MakeGrid(){
-
-}
-
-#pragma kernel SpatialHashing
-
-[numthreads(1024,1,1)]
-void SpatialHashing(uint3 Pid : SV_DispatchThreadID)
-{
-    int id = Pid.x;
-
-    if(id < 1){
-        MakeGrid();
-    }
-
-    Insert(id);
-
-
-}
-
-
-
-void Query(){
-
-}
-
-
 #pragma kernel BoidsLogic
 [numthreads(256,1,1)]
 void BoidsLogic (uint3 Pid : SV_DispatchThreadID)
