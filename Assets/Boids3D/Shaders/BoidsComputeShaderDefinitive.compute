@@ -173,9 +173,8 @@ void BoidsLogic (uint3 Pid : SV_DispatchThreadID)
         return;
     }
     
+    // Per-Instance variables
     TRS currentMatrix = GetTRS(_OutputBuffer[localID]);
-
-    //shared memory population
     BoidData currentBoid = _InputBoidBuffer[localID];
 
     //meat of the algorithm
