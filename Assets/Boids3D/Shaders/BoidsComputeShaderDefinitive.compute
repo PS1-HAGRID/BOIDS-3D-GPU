@@ -16,7 +16,125 @@ struct BoidData{
     int Group;
 };
 
+struct TRS
+{
+    float3 position;
+    float3 scale;
+    float3 rotation;
+};
+
+float3 GetPosition(float4x4 pMatrix)
+{
+    return float3(pMatrix._m03, pMatrix._m13, pMatrix._m23);
+}
+
+float3 GetScale(float4x4 pMatrix)
+{
+    float3 lScale;
+    lScale.x = length(float3(pMatrix._m00, pMatrix._m10, pMatrix._m20));
+    lScale.y = length(float3(pMatrix._m01, pMatrix._m11, pMatrix._m21));
+    lScale.z = length(float3(pMatrix._m02, pMatrix._m12, pMatrix._m22));
+    return lScale;
+}
+
+float3 GetRotation(float4x4 pMatrix)
+{
+    float3 lScale = GetScale(pMatrix);
+
+    float3x3 lRotationMatrix;
+    lRotationMatrix[0] = float3(pMatrix._m00, pMatrix._m10, pMatrix._m20) / lScale.x;
+    lRotationMatrix[1] = float3(pMatrix._m01, pMatrix._m11, pMatrix._m21) / lScale.y;
+    lRotationMatrix[2] = float3(pMatrix._m02, pMatrix._m12, pMatrix._m22) / lScale.z;
+    
+    float3 lRot;
+    lRot.x = asin(-lRotationMatrix[1].z);
+    lRot.y = atan2(lRotationMatrix[0].z, lRotationMatrix[2].z);
+    lRot.z = atan2(lRotationMatrix[1].x, lRotationMatrix[1].y);
+
+    return lRot;
+}
+
+TRS GetTRS(float4x4 pMatrix)
+{
+    TRS DecMatrix;
+
+    DecMatrix.position = GetPosition(pMatrix);
+    DecMatrix.rotation = GetRotation(pMatrix);
+    DecMatrix.scale = GetScale(pMatrix);
+
+    return DecMatrix;
+}
+
+float4x4 SetPosition(float3 pPos)
+{
+    return float4x4(1, 0, 0, pPos.x,
+                    0, 1, 0, pPos.y,
+                    0, 0, 1, pPos.z,
+                    0, 0, 0, 1);
+}
+
+float4x4 SetScale(float3 pScale)
+{
+    return float4x4(pScale.x, 0, 0, 0,
+                    0, pScale.y, 0, 0,
+                    0, 0, pScale.z, 0,
+                    0, 0, 0, 1);
+}
+
+float4x4 SetRotation(float3 pRot)
+{
+    float lCosX = cos(pRot.x);
+    float lSinX = sin(pRot.x);
+    float lCosY = cos(pRot.y);
+    float lSinY = sin(pRot.y);
+    float lCosZ = cos(pRot.z);
+    float lSinZ = sin(pRot.z);
+
+    float4x4 lRotX;
+    lRotX = float4x4(1, 0, 0, 0,
+                     0, lCosX, lSinX, 0,
+                     0, -lSinX, lCosX, 0,
+                     0, 0, 0, 1);
+
+    float4x4 lRotY;
+    lRotY = float4x4(lCosY, 0, -lSinY, 0,
+                     0, 1, 0, 0,
+                     lSinY, 0, lCosY, 0,
+                     0, 0, 0, 1);
+
+    float4x4 lRotZ;
+    lRotZ = float4x4(lCosZ, lSinZ, 0, 0,
+                     -lSinZ, lCosZ, 0, 0,
+                     0, 0, 1, 0,
+                     0, 0, 0, 1);
+
+    return mul(lRotZ, mul(lRotY, lRotX));
+}
+
+float4x4 SetTRS(TRS pDecMatrix)
+{
+    float4x4 lMatrix;
+    
+    float4x4 lPos = SetPosition(pDecMatrix.position);
+    float4x4 lRot = SetRotation(pDecMatrix.rotation);
+    float4x4 lScale = SetScale(pDecMatrix.scale);
+
+    lMatrix = mul(lPos, mul(lRot, lScale));
+    
+    return lMatrix;
+}
+
+float3 GetRotationToDirection(float3 pDir)
+{
+    float yaw = atan2(pDir.x, pDir.z) + 90;
+    float pitch = atan2(pDir.y, sqrt(pDir.x * pDir.x + pDir.z * pDir.z)) + 90;
+    float roll = 0;
+    
+    return float3(yaw,pitch,roll);
+}
+
 RWStructuredBuffer<BoidData> _InputBoidBuffer : register(u0);
+RWStructuredBuffer<float4x4> _OutputBuffer : register(u4);
 
 RWStructuredBuffer<int> hashTableStart : register(u1);
 RWStructuredBuffer<int> hashTable : register(u2);
@@ -31,8 +149,6 @@ uint querySize;
 float fieldOfView;
 float protectedRange;
 float maxSpeed;
-float deltaTime;
-float simulationSpeed;
 
 float centeringFactor;
 float alignmentFactor;
@@ -94,6 +210,13 @@ void BoidsLogic (uint3 Pid : SV_DispatchThreadID)
 {
     //small calculation to find the globalIDs of the threads within the threadgroup
     uint localID = Pid.x;
+    
+    if (localID > numOfBoids)
+    {
+        return;
+    }
+    
+    TRS currentMatrix = GetTRS(_OutputBuffer[localID]);
 
     //shared memory population
     BoidData currentBoid = _InputBoidBuffer[localID];
@@ -111,13 +234,18 @@ void BoidsLogic (uint3 Pid : SV_DispatchThreadID)
     //brain of the algorithm
     for (uint otherboid = 0; otherboid < numOfBoids; otherboid++)
     {
+        if (otherboid == localID)
+        {
+            continue;
+        }
+        
         BoidData currentOtherBoid = _InputBoidBuffer[otherboid];
 
         float3 diff = currentBoid.Position - currentOtherBoid.Position;
         
         float squaredDistance = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
         
-        if (squaredDistance > fieldOfView * fieldOfView){
+        if(squaredDistance > fieldOfView * fieldOfView){
             continue;
         }
 
@@ -126,14 +254,12 @@ void BoidsLogic (uint3 Pid : SV_DispatchThreadID)
             continue;
         }
 
-        if (currentBoid.Group != currentOtherBoid.Group)
+        if(currentBoid.Group != currentOtherBoid.Group)
         {
             continue;
         }
         
-        if(neightbors > maxNeightbors){
-            continue;
-        }
+
 
         neightbors++;
 
@@ -182,10 +308,15 @@ void BoidsLogic (uint3 Pid : SV_DispatchThreadID)
     if(currentBoid.Position.z < minCorner.z){
         currentBoid.Velocity.z += turnFactor;
     }
-
+    // Computing Rotation
+    currentMatrix.rotation = GetRotationToDirection(currentBoid.Position + currentBoid.Velocity);
+    
     //adding the final velocity to the position
     currentBoid.Position += currentBoid.Velocity;
+    currentMatrix.position = currentBoid.Position;
 
     //adding everything to the output buffer and readying for the return trip
     _InputBoidBuffer[localID] = currentBoid;
+    
+    _OutputBuffer[localID] = SetTRS(currentMatrix);
 }

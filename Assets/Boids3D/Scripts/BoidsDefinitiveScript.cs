@@ -6,8 +6,8 @@ using Random = UnityEngine.Random;
 
 public struct BoidData
 {
-    public float3 Position;
-    public float3 Velocity;
+    public Vector3 Position;
+    public Vector3 Velocity;
     public int Group;
 }
 
@@ -37,7 +37,7 @@ public class BoidsDefinitiveScript : MonoBehaviour
     [SerializeField] public int _SimulationSpeed = 1;
 
     const int THREADS_PER_GROUP = 256;
-    const int ITEMS_PER_BATCHES = 1000;
+    const int ITEMS_PER_BATCHES = 1023;
     int _NumThreadGroupsForBoidsToDispatch = 1;
     int BoidsLogicKernelIndex = 0;
     int SpatialHashingKernelIndex = 1;
@@ -45,9 +45,11 @@ public class BoidsDefinitiveScript : MonoBehaviour
     BoidData[] boidDatas;
     Matrix4x4[] boidMatrices;
 
+
     List<Matrix4x4[]> batches = new List<Matrix4x4[]>();
 
     ComputeBuffer _InputBuffer;
+    ComputeBuffer _OutputBuffer;
 
     ComputeBuffer _HashTableBuffer;
     ComputeBuffer _HashStartBuffer;
@@ -103,6 +105,7 @@ public class BoidsDefinitiveScript : MonoBehaviour
         _HashStartBuffer = new ComputeBuffer(numberOfBoids, sizeof(int));
         _QueryIDs = new ComputeBuffer(numberOfBoids, sizeof(uint));
         _EmptyQueryBuffer = new ComputeBuffer(numberOfBoids, sizeof(uint));
+        _OutputBuffer = new ComputeBuffer(numberOfBoids, sizeof(float) * 16);
 
         //binding I/O buffers
         _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "_InputBoidBuffer", _InputBuffer);
@@ -110,6 +113,7 @@ public class BoidsDefinitiveScript : MonoBehaviour
         _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "emptyQueryBuffer", _EmptyQueryBuffer);
         _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "hashTable", _HashTableBuffer);
         _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "hashTableStart", _HashStartBuffer);
+        _BoidsLogicShader.SetBuffer(BoidsLogicKernelIndex, "_OutputBuffer", _OutputBuffer);
 
         _BoidsLogicShader.SetBuffer(SpatialHashingKernelIndex, "_InputBoidBuffer", _InputBuffer);
         _BoidsLogicShader.SetBuffer(SpatialHashingKernelIndex, "hashTable", _HashTableBuffer);
@@ -140,30 +144,42 @@ public class BoidsDefinitiveScript : MonoBehaviour
         Matrix4x4[] matrices = new Matrix4x4[ITEMS_PER_BATCHES];
         batches.Add(matrices);
 
+        boidMatrices = new Matrix4x4[numberOfBoids];
+
         //populating boidData array and batch renderer
         int currentBatch = 0;
         int itemCounter = 0;
         for(int currentBoid = 0; currentBoid < numberOfBoids; currentBoid++)
         {
-            boidDatas[currentBoid].Position = new float3(Random.Range(_Bounds.bounds.min.x, _Bounds.bounds.max.x), Random.Range(_Bounds.bounds.min.y, _Bounds.bounds.max.y), Random.Range(_Bounds.bounds.min.z, _Bounds.bounds.max.z));
-            boidDatas[currentBoid].Velocity = new float3(Random.Range(0, 1), Random.Range(0, 1), Random.Range(0, 1));
+            boidDatas[currentBoid].Position = new Vector3(Random.Range(_Bounds.bounds.min.x, _Bounds.bounds.max.x), Random.Range(_Bounds.bounds.min.y, _Bounds.bounds.max.y), Random.Range(_Bounds.bounds.min.z, _Bounds.bounds.max.z));
+            boidDatas[currentBoid].Velocity = new Vector3(Random.Range(0, 1), Random.Range(0, 1), Random.Range(0, 1));
             boidDatas[currentBoid].Group = AssignGroup(numOfGroup);
 
-            batches[currentBatch][itemCounter] = MatrixHelper.MatrixBuilder(boidDatas[currentBoid].Position, quaternion.identity, boidScale);
+            Matrix4x4 currentMatrix = MatrixHelper.MatrixBuilder(boidDatas[currentBoid].Position, quaternion.identity, boidScale);
+            boidMatrices[currentBoid] = currentMatrix;
+            batches[currentBatch][itemCounter] = currentMatrix;
 
             itemCounter++;
 
             if(itemCounter >= ITEMS_PER_BATCHES)
             {
+                int lItemsToBatch = ITEMS_PER_BATCHES;
                 itemCounter = 0;
                 currentBatch++;
-                Matrix4x4[] currentmatrices = new Matrix4x4[ITEMS_PER_BATCHES];
+
+                if (ITEMS_PER_BATCHES >= numberOfBoids - ITEMS_PER_BATCHES * currentBatch) 
+                {
+                    lItemsToBatch = numberOfBoids - ITEMS_PER_BATCHES * currentBatch;
+                }
+
+                Matrix4x4[] currentmatrices = new Matrix4x4[lItemsToBatch];
                 batches.Add(currentmatrices);
             }
         }
 
         //assigning array to I buffer
         _InputBuffer.SetData(boidDatas);
+        _OutputBuffer.SetData(boidMatrices);
        }
 
     void Start()
@@ -173,7 +189,7 @@ public class BoidsDefinitiveScript : MonoBehaviour
 
     private void SimStep()
     {
-        //Update Dynamic Values
+        // Update Dynamic Values
         UpdateSimulationParameters();
 
         //dispatching kernels
@@ -181,14 +197,14 @@ public class BoidsDefinitiveScript : MonoBehaviour
         _BoidsLogicShader.Dispatch(BoidsLogicKernelIndex, _NumThreadGroupsForBoidsToDispatch, 1, 1);
 
         //collecting data from shader
-        _InputBuffer.GetData(boidDatas);
+        _OutputBuffer.GetData(boidMatrices);
 
         //updating batches for batch renderer
         int id = 0;
         int currentBatch = 0;
-        foreach (BoidData boidData in boidDatas)
+        foreach (Matrix4x4 boidData in boidMatrices)
         {
-            batches[currentBatch][id] = Matrix4x4.TRS(boidData.Position, Quaternion.LookRotation(_Camera.transform.forward), boidScale);
+            batches[currentBatch][id] = boidData;
             id++;
             if (id >= ITEMS_PER_BATCHES)
             {
@@ -203,8 +219,19 @@ public class BoidsDefinitiveScript : MonoBehaviour
 
     private void UpdateSimulationParameters()
     {
-        _BoidsLogicShader.SetFloat("deltaTime", Time.deltaTime);
-        _BoidsLogicShader.SetFloat("simulationSpeed", _SimulationSpeed);
+        _BoidsLogicShader.SetFloat("fieldOfView", fieldOfView);
+        _BoidsLogicShader.SetFloat("protectedRange", protectedRange);
+        _BoidsLogicShader.SetFloat("maxSpeed", maxSpeed);
+
+        _BoidsLogicShader.SetFloat("centeringFactor", centeringFactor);
+        _BoidsLogicShader.SetFloat("alignmentFactor", alignmentFactor);
+        _BoidsLogicShader.SetFloat("avoidanceFactor", avoidanceFactor);
+        _BoidsLogicShader.SetFloat("turnFactor", steerAwayFromBoundsStrenght);
+
+        _BoidsLogicShader.SetVector("center", _Bounds.bounds.center);
+        _BoidsLogicShader.SetVector("size", _Bounds.bounds.size);
+        _BoidsLogicShader.SetVector("maxCorner", _Bounds.bounds.max);
+        _BoidsLogicShader.SetVector("minCorner", _Bounds.bounds.min);
     }
 
     private void DrawBoids()
@@ -218,5 +245,10 @@ public class BoidsDefinitiveScript : MonoBehaviour
     void Update()
     {
         SimStep();
+    }
+
+    private void OnDrawGizmos()
+    {
+
     }
 }
