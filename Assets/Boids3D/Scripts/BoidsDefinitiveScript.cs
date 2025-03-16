@@ -70,7 +70,7 @@ public class BoidsDefinitiveScript : MonoBehaviour
         BoidsLogicKernelIndex = _BoidsLogicShader.FindKernel("BoidsLogic");
 
         // initializing I/O buffers
-        _InputBuffer = new ComputeBuffer(numberOfBoids, sizeof(float) * 6 + sizeof(int));
+        _InputBuffer = new ComputeBuffer(numberOfBoids, sizeof(float) * 7);
         _OutputBuffer = new ComputeBuffer(numberOfBoids, sizeof(float) * 16);
 
         //binding I/O buffers
@@ -108,7 +108,6 @@ public class BoidsDefinitiveScript : MonoBehaviour
         for(int currentBoid = 0; currentBoid < numberOfBoids; currentBoid++)
         {
             boidDatas[currentBoid].Position = new Vector3(Random.Range(_Bounds.bounds.min.x, _Bounds.bounds.max.x), Random.Range(_Bounds.bounds.min.y, _Bounds.bounds.max.y), Random.Range(_Bounds.bounds.min.z, _Bounds.bounds.max.z));
-            boidDatas[currentBoid].Velocity = new Vector3(Random.Range(0, 1), Random.Range(0, 1), Random.Range(0, 1));
             boidDatas[currentBoid].Group = AssignGroup(numOfGroup);
 
             Matrix4x4 currentMatrix = MatrixHelper.MatrixBuilder(boidDatas[currentBoid].Position, quaternion.identity, boidScale);
